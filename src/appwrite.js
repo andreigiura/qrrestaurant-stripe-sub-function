@@ -175,8 +175,9 @@ class AppwriteService {
 
       const allTables = tablesResponse.documents;
       const activeTables = allTables.filter(t => t.active === true);
+      const inactiveTables = allTables.filter(t => t.active === false);
 
-      context.log(`Found ${activeTables.length} active tables out of ${allTables.length} total`);
+      context.log(`Found ${activeTables.length} active and ${inactiveTables.length} inactive tables out of ${allTables.length} total`);
 
       // No subscription or limit is 0 - deactivate ALL tables
       if (limit === 0) {
@@ -194,17 +195,32 @@ class AppwriteService {
         return {
           success: true,
           deactivated: activeTables.length,
+          reactivated: 0,
           message: `Deactivated all ${activeTables.length} tables (no active subscription)`,
         };
       }
 
-      // Unlimited plan - no action needed
+      // Unlimited plan - reactivate ALL tables
       if (limit === -1) {
-        context.log('Pro plan - unlimited tables');
+        context.log('Pro plan - unlimited tables, reactivating all inactive tables');
+
+        const reactivatedIds = [];
+        for (const table of inactiveTables) {
+          await this.databases.updateDocument(
+            DATABASE_ID,
+            TABLES_COLLECTION,
+            table.$id,
+            { active: true }
+          );
+          reactivatedIds.push(table.$id);
+        }
+
         return {
           success: true,
           deactivated: 0,
-          message: 'Pro plan has unlimited tables',
+          reactivated: reactivatedIds.length,
+          reactivatedIds,
+          message: `Reactivated ${reactivatedIds.length} tables (Pro plan - unlimited)`,
         };
       }
 
@@ -229,17 +245,48 @@ class AppwriteService {
         return {
           success: true,
           deactivated: deactivatedIds.length,
+          reactivated: 0,
           deactivatedIds,
           message: `Deactivated ${deactivatedIds.length} tables (downgrade to ${newSubscription})`,
         };
       }
 
-      // Under or at limit - no action needed
-      context.log(`User is within limits (${activeTables.length}/${limit} tables)`);
+      // Under limit - reactivate tables up to the limit (FIFO - oldest inactive first)
+      if (activeTables.length < limit && inactiveTables.length > 0) {
+        const availableSlots = limit - activeTables.length;
+        const tablesToReactivate = inactiveTables
+          .sort((a, b) => new Date(a.$createdAt) - new Date(b.$createdAt)) // Oldest first
+          .slice(0, availableSlots);
+
+        context.log(`Under limit - reactivating ${tablesToReactivate.length} oldest inactive tables`);
+
+        const reactivatedIds = [];
+        for (const table of tablesToReactivate) {
+          await this.databases.updateDocument(
+            DATABASE_ID,
+            TABLES_COLLECTION,
+            table.$id,
+            { active: true }
+          );
+          reactivatedIds.push(table.$id);
+        }
+
+        return {
+          success: true,
+          deactivated: 0,
+          reactivated: reactivatedIds.length,
+          reactivatedIds,
+          message: `Reactivated ${reactivatedIds.length} tables (upgrade to ${newSubscription})`,
+        };
+      }
+
+      // At limit - no action needed
+      context.log(`User is at limits (${activeTables.length}/${limit} tables)`);
       return {
         success: true,
         deactivated: 0,
-        message: `User is within limits (${activeTables.length}/${limit} tables)`,
+        reactivated: 0,
+        message: `User is at limits (${activeTables.length}/${limit} tables)`,
       };
     } catch (error) {
       context.error('Error enforcing table limits:', error);
