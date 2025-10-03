@@ -88,6 +88,27 @@ class StripeService {
   }
 
   /**
+   * @param {string} customerId
+   * @param {string} returnUrl
+   */
+  async createPortalSession(context, customerId, returnUrl) {
+    try {
+      context.log(`Creating Stripe portal session for customer: ${customerId}`);
+
+      const session = await this.client.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: returnUrl,
+      });
+
+      context.log(`Portal session created: ${session.url}`);
+      return session;
+    } catch (err) {
+      context.error(err);
+      return null;
+    }
+  }
+
+  /**
    * @returns {import("stripe").Stripe.DiscriminatedEvent | null}
    */
   validateWebhook(context, req) {

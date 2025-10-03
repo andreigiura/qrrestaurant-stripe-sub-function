@@ -82,6 +82,43 @@ export default async (context) => {
       log(`Created Stripe checkout session for user ${userId} with plan ${planType} (${billingInterval}).`);
       return res.redirect(session.url, 303);
 
+    case '/portal':
+      // Parse body if it's a string
+      let portalBodyData = req.body;
+      if (typeof portalBodyData === 'string') {
+        try {
+          portalBodyData = JSON.parse(portalBodyData);
+        } catch (e) {
+          error('Failed to parse request body');
+          portalBodyData = {};
+        }
+      }
+
+      const portalUserId = req.headers['x-appwrite-user-id'];
+      if (!portalUserId) {
+        error('User ID not found in request.');
+        return res.json({ success: false, error: 'User ID required' }, 400);
+      }
+
+      const returnUrl = portalBodyData?.returnUrl || req.scheme + '://' + req.headers['host'] + '/';
+
+      // Get Stripe customer ID from user preferences
+      let customerId = await appwrite.getStripeCustomerId(portalUserId);
+
+      if (!customerId) {
+        error(`No Stripe customer found for user ${portalUserId}`);
+        return res.json({ success: false, error: 'No active subscription found' }, 404);
+      }
+
+      const portalSession = await stripe.createPortalSession(context, customerId, returnUrl);
+      if (!portalSession) {
+        error('Failed to create Stripe portal session.');
+        return res.json({ success: false, error: 'Failed to create portal session' }, 500);
+      }
+
+      log(`Created Stripe portal session for user ${portalUserId}`);
+      return res.redirect(portalSession.url, 303);
+
     case '/webhook':
       const event = stripe.validateWebhook(context, req);
       if (!event) {
@@ -95,6 +132,14 @@ export default async (context) => {
         const session = event.data.object;
         const userId = session.metadata.userId;
         const planType = session.metadata.planType || 'starter';
+        const customerId = session.customer;
+
+        // Store Stripe customer ID if not already stored
+        const existingCustomerId = await appwrite.getStripeCustomerId(userId);
+        if (!existingCustomerId && customerId) {
+          await appwrite.setStripeCustomerId(userId, customerId);
+          log(`Stored Stripe customer ID for user ${userId}`);
+        }
 
         await appwrite.createSubscription(userId, planType);
         log(`Created ${planType} subscription for user ${userId}`);

@@ -51,6 +51,33 @@ class AppwriteService {
 
     await this.users.updateLabels(userId, labels);
   }
+
+  /**
+   * Get Stripe customer ID from user preferences
+   * @param {string} userId
+   * @returns {Promise<string|null>}
+   */
+  async getStripeCustomerId(userId) {
+    try {
+      const user = await this.users.get(userId);
+      return user.prefs?.stripeCustomerId || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Store Stripe customer ID in user preferences
+   * @param {string} userId
+   * @param {string} customerId
+   * @returns {Promise<void>}
+   */
+  async setStripeCustomerId(userId, customerId) {
+    const user = await this.users.get(userId);
+    const prefs = user.prefs || {};
+    prefs.stripeCustomerId = customerId;
+    await this.users.updatePrefs(userId, prefs);
+  }
 }
 
 export default AppwriteService;
