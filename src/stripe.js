@@ -2,21 +2,18 @@
 
 import stripe from 'stripe';
 
-const PLANS = {
+const PRICE_IDS = {
   starter: {
-    name: 'Starter Plan',
-    monthly: 4900, // $49.00
-    annual: 4400, // $44.00
+    monthly: 'price_1SEA2XEJ7AJnPOEgNxxySxGq',
+    annual: 'price_1SEA3oEJ7AJnPOEgE899Ni3D',
   },
   growth: {
-    name: 'Growth Plan',
-    monthly: 9900, // $99.00
-    annual: 8900, // $89.00
+    monthly: 'price_1SEA2wEJ7AJnPOEgTLJ5zFpI',
+    annual: 'price_1SEA5tEJ7AJnPOEgc7DzoIno',
   },
   pro: {
-    name: 'Pro Plan',
-    monthly: 19900, // $199.00
-    annual: 17900, // $179.00
+    monthly: 'price_1SEA3HEJ7AJnPOEgMK5YZsfX',
+    annual: 'price_1SEA6VEJ7AJnPOEgvUWT5ci7',
   },
 };
 
@@ -36,36 +33,23 @@ class StripeService {
    * @param {string} failureUrl
    */
   async checkoutSubscription(context, userId, planType, billingInterval, successUrl, failureUrl) {
-    const plan = PLANS[planType];
-    if (!plan) {
-      context.error(`Invalid plan type: ${planType}`);
+    const priceId = PRICE_IDS[planType]?.[billingInterval];
+    if (!priceId) {
+      context.error(`Invalid plan type or billing interval: ${planType} ${billingInterval}`);
       return null;
     }
 
-    const amount = billingInterval === 'annual' ? plan.annual : plan.monthly;
-    const interval = billingInterval === 'annual' ? 'year' : 'month';
-
-    /** @type {import('stripe').Stripe.Checkout.SessionCreateParams.LineItem} */
-    const lineItem = {
-      price_data: {
-        unit_amount: amount,
-        currency: 'usd',
-        recurring: {
-          interval: interval,
-        },
-        product_data: {
-          name: plan.name,
-        },
-      },
-      quantity: 1,
-    };
-
     try {
-      context.log(`Creating Stripe session with success_url: ${successUrl}, cancel_url: ${failureUrl}`);
+      context.log(`Creating Stripe session with price: ${priceId}, success_url: ${successUrl}, cancel_url: ${failureUrl}`);
 
       const session = await this.client.checkout.sessions.create({
         payment_method_types: ['card'],
-        line_items: [lineItem],
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1,
+          },
+        ],
         success_url: successUrl,
         cancel_url: failureUrl,
         client_reference_id: userId,
