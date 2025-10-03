@@ -219,13 +219,28 @@ export default async (context) => {
         const session = event.data.object;
         const userId = session.metadata.userId;
         const planType = session.metadata.planType || 'starter';
+        const status = session.status; // active, canceled, past_due, etc.
 
-        await appwrite.createSubscription(userId, planType);
-        log(`Updated to ${planType} subscription for user ${userId}`);
+        log(`Subscription updated for user ${userId}: status=${status}, planType=${planType}`);
 
-        // Enforce table limits after subscription update
-        const enforcementResult = await appwrite.enforceTableLimits(context, userId, planType);
-        log(`Table limits enforcement result: ${JSON.stringify(enforcementResult)}`);
+        // Only apply subscription if it's active
+        // If canceled/incomplete/past_due, treat as no subscription
+        if (status === 'active' || status === 'trialing') {
+          await appwrite.createSubscription(userId, planType);
+          log(`Updated to ${planType} subscription for user ${userId}`);
+
+          // Enforce table limits after subscription update
+          const enforcementResult = await appwrite.enforceTableLimits(context, userId, planType);
+          log(`Table limits enforcement result: ${JSON.stringify(enforcementResult)}`);
+        } else {
+          // Subscription is canceled, incomplete, or past_due - remove subscription
+          await appwrite.deleteSubscription(userId);
+          log(`Removed subscription for user ${userId} (status: ${status})`);
+
+          // Enforce limits as if no subscription
+          const enforcementResult = await appwrite.enforceTableLimits(context, userId, null);
+          log(`Table limits enforcement result: ${JSON.stringify(enforcementResult)}`);
+        }
 
         return res.json({ success: true });
       }
