@@ -32,6 +32,8 @@ export default async (context) => {
       const planType = req.body?.planType || 'starter';
       const billingInterval = req.body?.billingInterval || 'monthly';
 
+      log(`Received subscription request - successUrl: ${successUrl}, failureUrl: ${failureUrl}`);
+
       // Validate plan type
       if (!['starter', 'growth', 'pro'].includes(planType)) {
         error(`Invalid plan type: ${planType}`);
