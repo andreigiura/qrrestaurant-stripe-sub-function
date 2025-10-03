@@ -93,6 +93,86 @@ class StripeService {
   }
 
   /**
+   * Get subscription details for a customer
+   * @param {string} customerId
+   */
+  async getSubscriptionDetails(context, customerId) {
+    try {
+      context.log(`Fetching subscription details for customer: ${customerId}`);
+
+      // Get active subscriptions for customer
+      const subscriptions = await this.client.subscriptions.list({
+        customer: customerId,
+        status: 'all',
+        limit: 10,
+      });
+
+      if (subscriptions.data.length === 0) {
+        return null;
+      }
+
+      // Get the most recent subscription
+      const subscription = subscriptions.data[0];
+
+      // Get upcoming invoice for next payment info
+      let upcomingInvoice = null;
+      if (subscription.status === 'active' || subscription.status === 'trialing') {
+        try {
+          upcomingInvoice = await this.client.invoices.retrieveUpcoming({
+            customer: customerId,
+          });
+        } catch (err) {
+          context.log('No upcoming invoice found');
+        }
+      }
+
+      // Get payment history (invoices)
+      const invoices = await this.client.invoices.list({
+        customer: customerId,
+        limit: 10,
+      });
+
+      return {
+        subscription: {
+          id: subscription.id,
+          status: subscription.status,
+          currentPeriodStart: subscription.current_period_start,
+          currentPeriodEnd: subscription.current_period_end,
+          cancelAtPeriodEnd: subscription.cancel_at_period_end,
+          cancelAt: subscription.cancel_at,
+          canceledAt: subscription.canceled_at,
+          trialEnd: subscription.trial_end,
+          created: subscription.created,
+          plan: subscription.items.data[0]?.price,
+          metadata: subscription.metadata,
+        },
+        upcomingInvoice: upcomingInvoice ? {
+          amountDue: upcomingInvoice.amount_due,
+          currency: upcomingInvoice.currency,
+          periodStart: upcomingInvoice.period_start,
+          periodEnd: upcomingInvoice.period_end,
+          nextPaymentAttempt: upcomingInvoice.next_payment_attempt,
+        } : null,
+        invoices: invoices.data.map(inv => ({
+          id: inv.id,
+          amountDue: inv.amount_due,
+          amountPaid: inv.amount_paid,
+          currency: inv.currency,
+          status: inv.status,
+          created: inv.created,
+          periodStart: inv.period_start,
+          periodEnd: inv.period_end,
+          hostedInvoiceUrl: inv.hosted_invoice_url,
+          invoicePdf: inv.invoice_pdf,
+        })),
+      };
+    } catch (err) {
+      context.error(err);
+      return null;
+    }
+  }
+
+  /**
    * @returns {import("stripe").Stripe.DiscriminatedEvent | null}
    */
   validateWebhook(context, req) {

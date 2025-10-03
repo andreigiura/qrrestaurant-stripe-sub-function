@@ -119,6 +119,26 @@ export default async (context) => {
       log(`Created Stripe portal session for user ${portalUserId}`);
       return res.redirect(portalSession.url, 303);
 
+    case '/subscription':
+      // Get subscription details for the current user
+      const subUserId = req.headers['x-appwrite-user-id'];
+      if (!subUserId) {
+        return res.json({ success: false, error: 'User ID required' }, 400);
+      }
+
+      const subCustomerId = await appwrite.getStripeCustomerId(subUserId);
+      if (!subCustomerId) {
+        return res.json({ success: false, error: 'No subscription found' }, 404);
+      }
+
+      const subscriptionDetails = await stripe.getSubscriptionDetails(context, subCustomerId);
+      if (!subscriptionDetails) {
+        return res.json({ success: false, error: 'Failed to fetch subscription details' }, 500);
+      }
+
+      log(`Retrieved subscription details for user ${subUserId}`);
+      return res.json({ success: true, data: subscriptionDetails });
+
     case '/sync-customer':
       // Helper endpoint to sync existing Stripe customers
       // This finds the customer by email and stores their ID
