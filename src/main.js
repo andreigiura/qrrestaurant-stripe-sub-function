@@ -207,6 +207,11 @@ export default async (context) => {
 
         await appwrite.deleteSubscription(userId);
         log(`Deleted subscription for user ${userId}`);
+
+        // Deactivate ALL tables when subscription is deleted
+        const enforcementResult = await appwrite.enforceTableLimits(context, userId, null);
+        log(`Table limits enforcement result: ${JSON.stringify(enforcementResult)}`);
+
         return res.json({ success: true });
       }
 
@@ -217,6 +222,11 @@ export default async (context) => {
 
         await appwrite.createSubscription(userId, planType);
         log(`Updated to ${planType} subscription for user ${userId}`);
+
+        // Enforce table limits after subscription update
+        const enforcementResult = await appwrite.enforceTableLimits(context, userId, planType);
+        log(`Table limits enforcement result: ${JSON.stringify(enforcementResult)}`);
+
         return res.json({ success: true });
       }
 
