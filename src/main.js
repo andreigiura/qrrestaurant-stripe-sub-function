@@ -27,12 +27,23 @@ export default async (context) => {
     case '/subscribe':
       const fallbackUrl = req.scheme + '://' + req.headers['host'] + '/';
 
-      const successUrl = req.body?.successUrl ?? fallbackUrl;
-      const failureUrl = req.body?.failureUrl ?? fallbackUrl;
-      const planType = req.body?.planType || 'starter';
-      const billingInterval = req.body?.billingInterval || 'monthly';
+      // Parse body if it's a string
+      let bodyData = req.body;
+      if (typeof bodyData === 'string') {
+        try {
+          bodyData = JSON.parse(bodyData);
+        } catch (e) {
+          error('Failed to parse request body');
+          bodyData = {};
+        }
+      }
 
-      log(`Received subscription request - successUrl: ${successUrl}, failureUrl: ${failureUrl}`);
+      const successUrl = bodyData?.successUrl ?? fallbackUrl;
+      const failureUrl = bodyData?.failureUrl ?? fallbackUrl;
+      const planType = bodyData?.planType || 'starter';
+      const billingInterval = bodyData?.billingInterval || 'monthly';
+
+      log(`Received subscription request - successUrl: ${successUrl}, failureUrl: ${failureUrl}, planType: ${planType}, billingInterval: ${billingInterval}`);
 
       // Validate plan type
       if (!['starter', 'growth', 'pro'].includes(planType)) {

@@ -61,7 +61,9 @@ class StripeService {
     };
 
     try {
-      return await this.client.checkout.sessions.create({
+      context.log(`Creating Stripe session with success_url: ${successUrl}, cancel_url: ${failureUrl}`);
+
+      const session = await this.client.checkout.sessions.create({
         payment_method_types: ['card'],
         line_items: [lineItem],
         success_url: successUrl,
@@ -76,6 +78,9 @@ class StripeService {
         },
         mode: 'subscription',
       });
+
+      context.log(`Stripe session created with ID: ${session.id}, actual success_url: ${session.success_url}`);
+      return session;
     } catch (err) {
       context.error(err);
       return null;
