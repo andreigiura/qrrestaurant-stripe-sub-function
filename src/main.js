@@ -29,6 +29,20 @@ export default async (context) => {
 
       const successUrl = req.body?.successUrl ?? fallbackUrl;
       const failureUrl = req.body?.failureUrl ?? fallbackUrl;
+      const planType = req.body?.planType || 'starter';
+      const billingInterval = req.body?.billingInterval || 'monthly';
+
+      // Validate plan type
+      if (!['starter', 'growth', 'pro'].includes(planType)) {
+        error(`Invalid plan type: ${planType}`);
+        return res.redirect(failureUrl, 303);
+      }
+
+      // Validate billing interval
+      if (!['monthly', 'annual'].includes(billingInterval)) {
+        error(`Invalid billing interval: ${billingInterval}`);
+        return res.redirect(failureUrl, 303);
+      }
 
       const userId = req.headers['x-appwrite-user-id'];
       if (!userId) {
@@ -39,6 +53,8 @@ export default async (context) => {
       const session = await stripe.checkoutSubscription(
         context,
         userId,
+        planType,
+        billingInterval,
         successUrl,
         failureUrl
       );
@@ -50,7 +66,7 @@ export default async (context) => {
       context.log('Session:');
       context.log(session);
 
-      log(`Created Stripe checkout session for user ${userId}.`);
+      log(`Created Stripe checkout session for user ${userId} with plan ${planType} (${billingInterval}).`);
       return res.redirect(session.url, 303);
 
     case '/webhook':
@@ -65,9 +81,10 @@ export default async (context) => {
       if (event.type === 'customer.subscription.created') {
         const session = event.data.object;
         const userId = session.metadata.userId;
+        const planType = session.metadata.planType || 'starter';
 
-        await appwrite.createSubscription(userId);
-        log(`Created subscription for user ${userId}`);
+        await appwrite.createSubscription(userId, planType);
+        log(`Created ${planType} subscription for user ${userId}`);
         return res.json({ success: true });
       }
 
@@ -77,6 +94,16 @@ export default async (context) => {
 
         await appwrite.deleteSubscription(userId);
         log(`Deleted subscription for user ${userId}`);
+        return res.json({ success: true });
+      }
+
+      if (event.type === 'customer.subscription.updated') {
+        const session = event.data.object;
+        const userId = session.metadata.userId;
+        const planType = session.metadata.planType || 'starter';
+
+        await appwrite.createSubscription(userId, planType);
+        log(`Updated to ${planType} subscription for user ${userId}`);
         return res.json({ success: true });
       }
 

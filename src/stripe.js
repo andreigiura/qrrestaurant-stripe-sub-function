@@ -2,6 +2,24 @@
 
 import stripe from 'stripe';
 
+const PLANS = {
+  starter: {
+    name: 'Starter Plan',
+    monthly: 4900, // $49.00
+    annual: 4400, // $44.00
+  },
+  growth: {
+    name: 'Growth Plan',
+    monthly: 9900, // $99.00
+    annual: 8900, // $89.00
+  },
+  pro: {
+    name: 'Pro Plan',
+    monthly: 19900, // $199.00
+    annual: 17900, // $179.00
+  },
+};
+
 class StripeService {
   constructor() {
     // Note: stripe cjs API types are faulty
@@ -12,20 +30,31 @@ class StripeService {
 
   /**
    * @param {string} userId
+   * @param {string} planType - 'starter', 'growth', or 'pro'
+   * @param {string} billingInterval - 'monthly' or 'annual'
    * @param {string} successUrl
    * @param {string} failureUrl
    */
-  async checkoutSubscription(context, userId, successUrl, failureUrl) {
+  async checkoutSubscription(context, userId, planType, billingInterval, successUrl, failureUrl) {
+    const plan = PLANS[planType];
+    if (!plan) {
+      context.error(`Invalid plan type: ${planType}`);
+      return null;
+    }
+
+    const amount = billingInterval === 'annual' ? plan.annual : plan.monthly;
+    const interval = billingInterval === 'annual' ? 'year' : 'month';
+
     /** @type {import('stripe').Stripe.Checkout.SessionCreateParams.LineItem} */
     const lineItem = {
       price_data: {
-        unit_amount: 1000, // $10.00
+        unit_amount: amount,
         currency: 'usd',
         recurring: {
-          interval: 'month',
+          interval: interval,
         },
         product_data: {
-          name: 'Premium Subscription',
+          name: plan.name,
         },
       },
       quantity: 1,
@@ -41,6 +70,8 @@ class StripeService {
         subscription_data: {
           metadata: {
             userId,
+            planType,
+            billingInterval,
           },
         },
         mode: 'subscription',
