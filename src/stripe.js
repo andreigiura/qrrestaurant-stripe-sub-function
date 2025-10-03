@@ -100,7 +100,7 @@ class StripeService {
     try {
       context.log(`Fetching subscription details for customer: ${customerId}`);
 
-      // Get active subscriptions for customer
+      // Get all subscriptions for customer (active and historical)
       const subscriptions = await this.client.subscriptions.list({
         customer: customerId,
         status: 'all',
@@ -111,12 +111,14 @@ class StripeService {
         return null;
       }
 
-      // Get the most recent subscription
-      const subscription = subscriptions.data[0];
+      // Find the active subscription (if any)
+      const activeSubscription = subscriptions.data.find(
+        sub => sub.status === 'active' || sub.status === 'trialing'
+      );
 
-      // Get upcoming invoice for next payment info
+      // Get upcoming invoice for next payment info (only if there's an active subscription)
       let upcomingInvoice = null;
-      if (subscription.status === 'active' || subscription.status === 'trialing') {
+      if (activeSubscription) {
         try {
           upcomingInvoice = await this.client.invoices.retrieveUpcoming({
             customer: customerId,
@@ -126,26 +128,40 @@ class StripeService {
         }
       }
 
-      // Get payment history (invoices)
+      // Get payment history (invoices) - shows ALL payments regardless of subscription
       const invoices = await this.client.invoices.list({
         customer: customerId,
-        limit: 10,
+        limit: 50,
       });
 
       return {
-        subscription: {
-          id: subscription.id,
-          status: subscription.status,
-          currentPeriodStart: subscription.current_period_start,
-          currentPeriodEnd: subscription.current_period_end,
-          cancelAtPeriodEnd: subscription.cancel_at_period_end,
-          cancelAt: subscription.cancel_at,
-          canceledAt: subscription.canceled_at,
-          trialEnd: subscription.trial_end,
-          created: subscription.created,
-          plan: subscription.items.data[0]?.price,
-          metadata: subscription.metadata,
-        },
+        // Current active subscription (or null if none active)
+        subscription: activeSubscription ? {
+          id: activeSubscription.id,
+          status: activeSubscription.status,
+          currentPeriodStart: activeSubscription.current_period_start,
+          currentPeriodEnd: activeSubscription.current_period_end,
+          cancelAtPeriodEnd: activeSubscription.cancel_at_period_end,
+          cancelAt: activeSubscription.cancel_at,
+          canceledAt: activeSubscription.canceled_at,
+          trialEnd: activeSubscription.trial_end,
+          created: activeSubscription.created,
+          plan: activeSubscription.items.data[0]?.price,
+          metadata: activeSubscription.metadata,
+        } : null,
+        // All subscriptions (for history)
+        allSubscriptions: subscriptions.data.map(sub => ({
+          id: sub.id,
+          status: sub.status,
+          currentPeriodStart: sub.current_period_start,
+          currentPeriodEnd: sub.current_period_end,
+          cancelAtPeriodEnd: sub.cancel_at_period_end,
+          cancelAt: sub.cancel_at,
+          canceledAt: sub.canceled_at,
+          created: sub.created,
+          plan: sub.items.data[0]?.price,
+          metadata: sub.metadata,
+        })),
         upcomingInvoice: upcomingInvoice ? {
           amountDue: upcomingInvoice.amount_due,
           currency: upcomingInvoice.currency,
@@ -153,6 +169,7 @@ class StripeService {
           periodEnd: upcomingInvoice.period_end,
           nextPaymentAttempt: upcomingInvoice.next_payment_attempt,
         } : null,
+        // All invoices/payments (not filtered by subscription)
         invoices: invoices.data.map(inv => ({
           id: inv.id,
           amountDue: inv.amount_due,
@@ -164,6 +181,7 @@ class StripeService {
           periodEnd: inv.period_end,
           hostedInvoiceUrl: inv.hosted_invoice_url,
           invoicePdf: inv.invoice_pdf,
+          subscriptionId: inv.subscription,
         })),
       };
     } catch (err) {
