@@ -104,17 +104,44 @@ class AppwriteService {
   }
 
   /**
+   * Check if user is in trial period (14 days from account creation)
+   * @param {Object} user - User object from Appwrite
+   * @returns {boolean}
+   */
+  isInTrialPeriod(user) {
+    if (!user || !user.$createdAt) return false;
+
+    const accountCreatedAt = new Date(user.$createdAt);
+    const now = new Date();
+    const daysSinceCreation = (now - accountCreatedAt) / (1000 * 60 * 60 * 24);
+
+    return daysSinceCreation <= 14;
+  }
+
+  /**
    * Get table limits for subscription tier
    * @param {string|null} subscription
+   * @param {Object} user - User object (to check trial status)
    * @returns {number} - Max tables allowed (0 for no subscription, -1 for unlimited)
    */
-  getTableLimit(subscription) {
+  getTableLimit(subscription, user = null) {
     const limits = {
       starter: 15,
       growth: 30,
       pro: -1, // unlimited
     };
-    return limits[subscription] || 0;
+
+    // If user has a paid subscription, return that limit
+    if (subscription && limits[subscription] !== undefined) {
+      return limits[subscription];
+    }
+
+    // No subscription - check if in trial period
+    if (user && this.isInTrialPeriod(user)) {
+      return 1; // Trial: 1 table allowed
+    }
+
+    return 0; // No subscription and trial expired = 0 tables
   }
 
   /**
@@ -127,9 +154,12 @@ class AppwriteService {
    */
   async enforceTableLimits(context, userId, newSubscription) {
     try {
-      const limit = this.getTableLimit(newSubscription);
+      // Get user info for trial check
+      const user = await this.users.get(userId);
+      const limit = this.getTableLimit(newSubscription, user);
+      const isInTrial = this.isInTrialPeriod(user);
 
-      context.log(`Enforcing table limits for user ${userId}: subscription=${newSubscription}, limit=${limit}`);
+      context.log(`Enforcing table limits for user ${userId}: subscription=${newSubscription}, limit=${limit}, trial=${isInTrial}`);
 
       // Get all tables for this user
       const { Query } = await import('node-appwrite');
