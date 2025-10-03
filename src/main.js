@@ -119,6 +119,41 @@ export default async (context) => {
       log(`Created Stripe portal session for user ${portalUserId}`);
       return res.redirect(portalSession.url, 303);
 
+    case '/sync-customer':
+      // Helper endpoint to sync existing Stripe customers
+      // This finds the customer by email and stores their ID
+      const syncUserId = req.headers['x-appwrite-user-id'];
+      if (!syncUserId) {
+        return res.json({ success: false, error: 'User ID required' }, 400);
+      }
+
+      try {
+        const user = await appwrite.users.get(syncUserId);
+        const userEmail = user.email;
+
+        if (!userEmail) {
+          return res.json({ success: false, error: 'User has no email' }, 400);
+        }
+
+        // Search for customer in Stripe by email
+        const customers = await stripe.client.customers.list({
+          email: userEmail,
+          limit: 1
+        });
+
+        if (customers.data.length > 0) {
+          const customer = customers.data[0];
+          await appwrite.setStripeCustomerId(syncUserId, customer.id);
+          log(`Synced Stripe customer ${customer.id} for user ${syncUserId}`);
+          return res.json({ success: true, customerId: customer.id });
+        } else {
+          return res.json({ success: false, error: 'No Stripe customer found with this email' }, 404);
+        }
+      } catch (err) {
+        error(err);
+        return res.json({ success: false, error: err.message }, 500);
+      }
+
     case '/webhook':
       const event = stripe.validateWebhook(context, req);
       if (!event) {
