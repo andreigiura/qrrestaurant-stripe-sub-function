@@ -220,12 +220,20 @@ export default async (context) => {
         const userId = session.metadata.userId;
         const planType = session.metadata.planType || 'starter';
         const status = session.status; // active, canceled, past_due, etc.
+        const customerId = session.customer;
 
         log(`Subscription updated for user ${userId}: status=${status}, planType=${planType}`);
 
         // Only apply subscription if it's active
         // If canceled/incomplete/past_due, treat as no subscription
         if (status === 'active' || status === 'trialing') {
+          // Update customer ID in case it changed (e.g., new subscription after cancellation)
+          const existingCustomerId = await appwrite.getStripeCustomerId(userId);
+          if (existingCustomerId !== customerId) {
+            await appwrite.setStripeCustomerId(userId, customerId);
+            log(`Updated Stripe customer ID for user ${userId}: ${existingCustomerId} -> ${customerId}`);
+          }
+
           await appwrite.createSubscription(userId, planType);
           log(`Updated to ${planType} subscription for user ${userId}`);
 
