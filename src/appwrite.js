@@ -1,9 +1,9 @@
 import { Client, Users } from 'node-appwrite';
 
 const PLAN_LABELS = {
-  starter: 'plan_starter',
-  growth: 'plan_growth',
-  pro: 'plan_pro',
+  starter: 'planstarter',
+  growth: 'plangrowth',
+  pro: 'planpro',
 };
 
 class AppwriteService {

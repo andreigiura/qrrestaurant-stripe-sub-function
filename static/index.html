@@ -362,17 +362,17 @@
           hasSubscription() {
             if (!this.user || !this.user.labels) return false;
             return this.user.labels.some(label =>
-              label === 'plan_starter' ||
-              label === 'plan_growth' ||
-              label === 'plan_pro'
+              label === 'planstarter' ||
+              label === 'plangrowth' ||
+              label === 'planpro'
             );
           },
 
           getCurrentPlan() {
             if (!this.user || !this.user.labels) return 'None';
-            if (this.user.labels.includes('plan_starter')) return 'Starter Plan';
-            if (this.user.labels.includes('plan_growth')) return 'Growth Plan';
-            if (this.user.labels.includes('plan_pro')) return 'Pro Plan';
+            if (this.user.labels.includes('planstarter')) return 'Starter Plan';
+            if (this.user.labels.includes('plangrowth')) return 'Growth Plan';
+            if (this.user.labels.includes('planpro')) return 'Pro Plan';
             return 'None';
           },
         });
