@@ -218,11 +218,32 @@ export default async (context) => {
       if (event.type === 'customer.subscription.updated') {
         const session = event.data.object;
         const userId = session.metadata.userId;
-        const planType = session.metadata.planType || 'starter';
         const status = session.status; // active, canceled, past_due, etc.
         const customerId = session.customer;
 
-        log(`Subscription updated for user ${userId}: status=${status}, planType=${planType}`);
+        // Detect plan type from price ID (metadata might be outdated when plan changes)
+        const priceId = session.items.data[0]?.price?.id;
+        let planType = session.metadata.planType || 'starter'; // Fallback to metadata
+
+        // Map price IDs to plan types
+        const PRICE_TO_PLAN = {
+          'price_1SEA2XEJ7AJnPOEgNxxySxGq': 'starter', // Starter Monthly
+          'price_1SEA3oEJ7AJnPOEgE899Ni3D': 'starter', // Starter Annual
+          'price_1SEA2wEJ7AJnPOEgTLJ5zFpI': 'growth',  // Growth Monthly
+          'price_1SEA5tEJ7AJnPOEgc7DzoIno': 'growth',  // Growth Annual
+          'price_1SEA3HEJ7AJnPOEgMK5YZsfX': 'pro',     // Pro Monthly
+          'price_1SEA6VEJ7AJnPOEgvUWT5ci7': 'pro',     // Pro Annual
+        };
+
+        // Override planType if we can detect it from price ID
+        if (priceId && PRICE_TO_PLAN[priceId]) {
+          planType = PRICE_TO_PLAN[priceId];
+          log(`Detected plan type from price ID: ${priceId} -> ${planType}`);
+        } else {
+          log(`Using plan type from metadata: ${planType}`);
+        }
+
+        log(`Subscription updated for user ${userId}: status=${status}, planType=${planType}, priceId=${priceId}`);
 
         // Only apply subscription if it's active
         // If canceled/incomplete/past_due, treat as no subscription
