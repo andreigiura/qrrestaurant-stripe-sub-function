@@ -53,6 +53,7 @@ class StripeService {
         success_url: successUrl,
         cancel_url: failureUrl,
         client_reference_id: userId,
+        billing_address_collection: 'required',
         subscription_data: {
           metadata: {
             userId,
